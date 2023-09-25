@@ -31,6 +31,7 @@ node *table[TABLE_SIZE];
 bool check(const char *word)
 {
     // TODO
+
     return false;
 }
 
@@ -95,7 +96,7 @@ unsigned int size(void)
     }
     else
     {
-        WORDS;
+        return WORDS;
     }
 }
 
