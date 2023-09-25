@@ -2,10 +2,15 @@
 
 #include <ctype.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "dictionary.h"
 
-#define WORDS 143091 // Number of words in the dictionary
+bool is_loaded = false;
+bool is_unloaded = false;
+const unsigned int WORDS = 143091; // Number of words in the dictionary
 #define TABLE_SIZE 143123  // A prime number slightly greater than 143,091
 
 // Represents a node in a hash table
@@ -62,7 +67,7 @@ bool load(const char *dictionary)
     }
 
     char word[LENGTH + 1];
-    while(fscan(file, "%s", word) != EOF)
+    while(fscanf(file, "%s", word) != EOF)
     {
         node *new_node = malloc(sizeof(node));
         if (!new_node)
@@ -76,6 +81,7 @@ bool load(const char *dictionary)
         table[index] = new_node;
     }
     fclose(file);
+    is_loaded = true;
     return true;
 }
 
@@ -83,12 +89,30 @@ bool load(const char *dictionary)
 unsigned int size(void)
 {
     // TODO
-    return 1;
+    if (!is_loaded)
+    {
+        return 0;
+    }
+    else
+    {
+        WORDS;
+    }
 }
 
 // Unloads dictionary from memory, returning true if successful, else false
 bool unload(void)
 {
     // TODO
-    return false;
+    for (int i = 0; i < TABLE_SIZE; i++)
+    {
+        node *cursor = table[i];
+        while(cursor)
+        {
+            node *tmp = cursor;
+            cursor = cursor->next;
+            free(tmp);
+        }
+    }
+    is_unloaded = true;
+    return is_unloaded;
 }
