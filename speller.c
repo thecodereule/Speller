@@ -1,76 +1,196 @@
-// Implements a dictionary's functionality
+// Implements a spell-checker
 
 #include <ctype.h>
-#include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 
 #include "dictionary.h"
 
-#define WORDS 143091 // Number of words in the dictionary
-#define TABLE_SIZE 143123  // A prime number slightly greater than 143,091
+// Undefine any definitions
+#undef calculate
+#undef getrusage
 
-// Represents a node in a hash table
-typedef struct node
+// Default dictionary
+#define DICTIONARY "dictionaries/large"
+
+// Prototype
+double calculate(const struct rusage *b, const struct rusage *a);
+
+int main(int argc, char *argv[])
 {
-    char word[LENGTH + 1];
-    struct node *next;
-}
-node;
-
-// TODO: Choose number of buckets in hash table
-const unsigned int N = TABLE_SIZE;
-
-// Hash table
-node *table[TABLE_SIZE];
-
-// Returns true if word is in dictionary, else false
-bool check(const char *word)
-{
-    // TODO
-    return false;
-}
-
-// Hashes word to a number
-unsigned int hash(const char *word)
-{
-    // TODO: Improve this hash function
-    unsigned int hash = 0;
-    while (*word)
+    // Check for correct number of args
+    if (argc != 2 && argc != 3)
     {
-        char c = tolower(*word);
-        if (isalpha(c))
-        {
-            hash = (hash * 27 + (c - 'a' + 1)) % TABLE_SIZE; // 'a' is 1, 'b' is 2, ..., 'z' is 26, ' is 27.
-        }
-        else if (c == '\'')
-        {
-            hash = (hash * 27 + 27) % TABLE_SIZE; // Apostrophe is 27
-        }
-        word++;
+        printf("Usage: ./speller [DICTIONARY] text\n");
+        return 1;
     }
-    return hash;
 
+    // Structures for timing data
+    struct rusage before, after;
+
+    // Benchmarks
+    double time_load = 0.0, time_check = 0.0, time_size = 0.0, time_unload = 0.0;
+
+    // Determine dictionary to use
+    char *dictionary = (argc == 3) ? argv[1] : DICTIONARY;
+
+    // Load dictionary
+    getrusage(RUSAGE_SELF, &before);
+    bool loaded = load(dictionary);
+    getrusage(RUSAGE_SELF, &after);
+
+    // Exit if dictionary not loaded
+    if (!loaded)
+    {
+        printf("Could not load %s.\n", dictionary);
+        return 1;
+    }
+
+    // Calculate time to load dictionary
+    time_load = calculate(&before, &after);
+
+    // Try to open text
+    char *text = (argc == 3) ? argv[2] : argv[1];
+    FILE *file = fopen(text, "r");
+    if (file == NULL)
+    {
+        printf("Could not open %s.\n", text);
+        unload();
+        return 1;
+    }
+
+    // Prepare to report misspellings
+    printf("\nMISSPELLED WORDS\n\n");
+
+    // Prepare to spell-check
+    int index = 0, misspellings = 0, words = 0;
+    char word[LENGTH + 1];
+
+    // Spell-check each word in text
+    char c;
+    while (fread(&c, sizeof(char), 1, file))
+    {
+        // Allow only alphabetical characters and apostrophes
+        if (isalpha(c) || (c == '\'' && index > 0))
+        {
+            // Append character to word
+            word[index] = c;
+            index++;
+
+            // Ignore alphabetical strings too long to be words
+            if (index > LENGTH)
+            {
+                // Consume remainder of alphabetical string
+                while (fread(&c, sizeof(char), 1, file) && isalpha(c));
+
+                // Prepare for new word
+                index = 0;
+            }
+        }
+
+        // Ignore words with numbers (like MS Word can)
+        else if (isdigit(c))
+        {
+            // Consume remainder of alphanumeric string
+            while (fread(&c, sizeof(char), 1, file) && isalnum(c));
+
+            // Prepare for new word
+            index = 0;
+        }
+
+        // We must have found a whole word
+        else if (index > 0)
+        {
+            // Terminate current word
+            word[index] = '\0';
+
+            // Update counter
+            words++;
+
+            // Check word's spelling
+            getrusage(RUSAGE_SELF, &before);
+            bool misspelled = !check(word);
+            getrusage(RUSAGE_SELF, &after);
+
+            // Update benchmark
+            time_check += calculate(&before, &after);
+
+            // Print word if misspelled
+            if (misspelled)
+            {
+                printf("%s\n", word);
+                misspellings++;
+            }
+
+            // Prepare for next word
+            index = 0;
+        }
+    }
+
+    // Check whether there was an error
+    if (ferror(file))
+    {
+        fclose(file);
+        printf("Error reading %s.\n", text);
+        unload();
+        return 1;
+    }
+
+    // Close text
+    fclose(file);
+
+    // Determine dictionary's size
+    getrusage(RUSAGE_SELF, &before);
+    unsigned int n = size();
+    getrusage(RUSAGE_SELF, &after);
+
+    // Calculate time to determine dictionary's size
+    time_size = calculate(&before, &after);
+
+    // Unload dictionary
+    getrusage(RUSAGE_SELF, &before);
+    bool unloaded = unload();
+    getrusage(RUSAGE_SELF, &after);
+
+    // Abort if dictionary not unloaded
+    if (!unloaded)
+    {
+        printf("Could not unload %s.\n", dictionary);
+        return 1;
+    }
+
+    // Calculate time to unload dictionary
+    time_unload = calculate(&before, &after);
+
+    // Report benchmarks
+    printf("\nWORDS MISSPELLED:     %d\n", misspellings);
+    printf("WORDS IN DICTIONARY:  %d\n", n);
+    printf("WORDS IN TEXT:        %d\n", words);
+    printf("TIME IN load:         %.2f\n", time_load);
+    printf("TIME IN check:        %.2f\n", time_check);
+    printf("TIME IN size:         %.2f\n", time_size);
+    printf("TIME IN unload:       %.2f\n", time_unload);
+    printf("TIME IN TOTAL:        %.2f\n\n",
+           time_load + time_check + time_size + time_unload);
+
+    // Success
+    return 0;
 }
 
-// Loads dictionary into memory, returning true if successful, else false
-bool load(const char *dictionary)
+// Returns number of seconds between b and a
+double calculate(const struct rusage *b, const struct rusage *a)
 {
-    // TODO
-    return false;
-}
-
-// Returns number of words in dictionary if loaded, else 0 if not yet loaded
-unsigned int size(void)
-{
-    // TODO
-    return 1;
-}
-
-// Unloads dictionary from memory, returning true if successful, else false
-bool unload(void)
-{
-    // TODO
-    return false;
+    if (b == NULL || a == NULL)
+    {
+        return 0.0;
+    }
+    else
+    {
+        return ((((a->ru_utime.tv_sec * 1000000 + a->ru_utime.tv_usec) -
+                  (b->ru_utime.tv_sec * 1000000 + b->ru_utime.tv_usec)) +
+                 ((a->ru_stime.tv_sec * 1000000 + a->ru_stime.tv_usec) -
+                  (b->ru_stime.tv_sec * 1000000 + b->ru_stime.tv_usec)))
+                / 1000000.0);
+    }
 }
