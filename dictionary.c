@@ -5,12 +5,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include "dictionary.h"
 
 bool is_loaded = false;
 bool is_unloaded = false;
-const unsigned int WORDS = 143091; // Number of words in the dictionary
+const unsigned int wordsInDict = 143091; // Number of words in the dictionary.txt
+unsigned int matchedWords = 0;// Number of matched words
 #define TABLE_SIZE 143123  // A prime number slightly greater than 143,091
 
 // Represents a node in a hash table
@@ -30,32 +32,47 @@ node *table[TABLE_SIZE];
 // Returns true if word is in dictionary, else false
 bool check(const char *word)
 {
-    // TODO
-
-    return false;
+    // Convert the word to lowercase for case-insensitive comparison
+    char lowercase_word[LENGTH + 1];
+    int len = strlen(word);
+    for (int i = 0; i < len; i++)
+    {
+        lowercase_word[i] = tolower(word[i]);
+    }
+    lowercase_word[len] = '\0'; // Null-terminate the lowercase word
+    
+    // Hash the word to get the index in the hash table
+    unsigned int index = hash(lowercase_word);
+    
+    // Traverse the linked list at the computed index
+    for (node *cursor = table[index]; cursor != NULL; cursor = cursor->next)
+    {
+        // Compare the word with the words in the dictionary
+        if (strcmp(cursor->word, lowercase_word) == 0)
+        {
+            return true; // Word is in the dictionary
+        }
+    }
+    return false; // Word is not in the dictionary
 }
+
 
 // Hashes word to a number
 unsigned int hash(const char *word)
 {
-    // TODO: Improve this hash function
     unsigned int hash = 0;
-    while (*word)
-    {
-        char c = tolower(*word);
-        if (isalpha(c))
-        {
-            hash = (hash * 27 + (c - 'a' + 1)) % TABLE_SIZE; // 'a' is 1, 'b' is 2, ..., 'z' is 26, ' is 27.
-        }
-        else if (c == '\'')
-        {
+    while (*word) {
+        char c = tolower(*word); // Convert to lowercase
+        if (isalpha(c)) {
+            hash = (hash * 27 + (c - 'a' + 1)) % TABLE_SIZE; // 'a' is 1, 'b' is 2, ..., 'z' is 26
+        } else if (c == '\'') {
             hash = (hash * 27 + 27) % TABLE_SIZE; // Apostrophe is 27
         }
         word++;
     }
     return hash;
-
 }
+
 
 // Loads dictionary into memory, returning true if successful, else false
 bool load(const char *dictionary)
@@ -80,6 +97,7 @@ bool load(const char *dictionary)
         unsigned int index = hash(word);
         new_node->next = table[index];
         table[index] = new_node;
+        matchedWords++;
     }
     fclose(file);
     is_loaded = true;
@@ -90,14 +108,7 @@ bool load(const char *dictionary)
 unsigned int size(void)
 {
     // TODO
-    if (!is_loaded)
-    {
-        return 0;
-    }
-    else
-    {
-        return WORDS;
-    }
+    return matchedWords;
 }
 
 // Unloads dictionary from memory, returning true if successful, else false
