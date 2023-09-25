@@ -3,7 +3,10 @@
 #include <ctype.h>
 #include <stdbool.h>
 
-#include "dictionary.h"
+#include "dictionary.h" 
+
+#define WORDS 143091 // Number of words in the dictionary
+#define TABLE_SIZE 143123  // A prime number slightly greater than 143,091
 
 // Represents a node in a hash table
 typedef struct node
@@ -14,10 +17,10 @@ typedef struct node
 node;
 
 // TODO: Choose number of buckets in hash table
-const unsigned int N = 26;
+const unsigned int N = TABLE_SIZE;
 
 // Hash table
-node *table[N];
+node *table[TABLE_SIZE];
 
 // Returns true if word is in dictionary, else false
 bool check(const char *word)
@@ -30,7 +33,22 @@ bool check(const char *word)
 unsigned int hash(const char *word)
 {
     // TODO: Improve this hash function
-    return toupper(word[0]) - 'A';
+    unsigned int hash = 0;
+    while (*word)
+    {
+        char c = tolower(*word);
+        if (isalpha(c))
+        {
+            hash = (hash * 27 + (c - 'a' + 1)) % TABLE_SIZE; // 'a' is 1, 'b' is 2, ..., 'z' is 26, ' is 27.
+        }
+        else if (hash == "\'")
+        {
+            hash = (hash * 27 + 27) % TABLE_SIZE; // Apostrophe is 27
+        }
+        word++;
+    }
+    return hash;
+
 }
 
 // Loads dictionary into memory, returning true if successful, else false
@@ -44,7 +62,6 @@ bool load(const char *dictionary)
 unsigned int size(void)
 {
     // TODO
-    return 0;
 }
 
 // Unloads dictionary from memory, returning true if successful, else false
